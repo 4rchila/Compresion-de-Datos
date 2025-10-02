@@ -1,0 +1,30 @@
+Proyecto3_Compresion/
+│── main.py                     # Menú principal con tkinter/pyqt
+│── README.md                   # Explicación básica del proyecto
+│
+├── compresion_texto/
+│   ├── huffman.py               # Algoritmo Huffman (compresión/descompresión)
+│   ├── gestor_archivos_texto.py # Funciones para abrir/guardar .txt y .bin
+│   └── __init__.py
+│
+├── compresion_imagen/
+│   ├── rle_imagen.py            # Algoritmo RLE para imágenes
+│   ├── gestor_archivos_img.py   # Manejo de .png, .bmp
+│   └── __init__.py
+│
+├── compresion_audio/
+│   ├── huffman_audio.py         # Huffman/RLE para audio
+│   ├── gestor_archivos_audio.py # Manejo de .wav/.mp3
+│   └── __init__.py
+│
+├── interfaz/
+│   ├── menu_principal.py        # Ventana principal
+│   ├── ventana_texto.py         # Subventana para compresión de texto
+│   ├── ventana_imagen.py        # Subventana para compresión de imágenes
+│   ├── ventana_audio.py         # Subventana para compresión de audio
+│   └── __init__.py
+│
+└── utils/
+    ├── comparador.py            # Comparación de tamaños
+    ├── errores.py               # Manejo de errores y validaciones
+    └── __init__.py
