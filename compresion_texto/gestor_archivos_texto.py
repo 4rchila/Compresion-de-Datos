@@ -1,11 +1,21 @@
 import pickle
-from compresion_texto import huffman
+from compresion_texto import hyffman
+
+class NodoHuffman:
+    def __init__(self, caracter, frecuencia):
+        self.caracter = caracter
+        self.frecuencia = frecuencia
+        self.izq = None
+        self.der = None
+
+    def __lt__(self, otro):
+        return self.frecuencia < otro.frecuencia
 
 def comprimir_archivo_txt(ruta_entrada, ruta_salida):
     with open(ruta_entrada, 'r', encoding='utf-8') as f:
         texto = f.read()
 
-    texto_codificado, codigos = huffman.comprimir_texto(texto)
+    texto_codificado, codigos = hyffman.comprimir_texto(texto)
 
     bits_extra = 8 - len(texto_codificado) % 8
     texto_codificado += "0" * bits_extra
