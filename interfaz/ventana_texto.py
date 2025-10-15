@@ -41,27 +41,175 @@ def create_text_compression_frame(main_container, show_frame_callback):
     original_size = ctk.StringVar(value="0 KB")
     compressed_size = ctk.StringVar(value="0 KB")
     compressed_file_path = ctk.StringVar(value="")
+
+    estaComprimido = ctk.BooleanVar(value=False)
     
     def select_file():
         file_path = filedialog.askopenfilename(
-            title="Seleccionar archivo de texto",
+            title="Seleccionar archivo",
+            filetypes=[
+                ("Archivos de texto", "*.txt"),
+                ("Archivos comprimidos", "*.bin"),
+                ("Todos los archivos", "*.*")
+            ]
+        )
+        if file_path:
+            selected_file_path.set(file_path)
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path) / 1024  # Tamaño en KB
+            
+            file_info_label.configure(text=f"📄 {file_name}")
+            
+            # Determinar si es archivo comprimido o texto
+            if file_path.lower().endswith('.bin'):
+                estaComprimido.set(True)
+                original_size.set("N/A")
+                compressed_size.set(f"{file_size:.2f} KB")
+                compression_ratio.set("N/A")
+                
+                # Configurar interfaz para descompresión
+                file_info_label.configure(text=f"📦 {file_name} (comprimido)")
+                compress_huffman_btn.configure(state="disabled")
+                preview_btn.configure(state="disabled")
+                decompress_btn.configure(state="normal")
+                
+                result_text.delete("1.0", "end")
+                result_text.insert("1.0", 
+                    f"📦 Archivo comprimido detectado\n"
+                    f"• Archivo: {file_name}\n"
+                    f"• Tamaño: {file_size:.2f} KB\n"
+                    f"• Listo para descomprimir\n\n"
+                    f"💡 Haz clic en 'Descomprimir' para extraer el contenido"
+                )
+                
+            else:
+                # Es archivo de texto normal
+                estaComprimido.set(False)
+                original_size.set(f"{file_size:.2f} KB")
+                compressed_size.set("0 KB")
+                compression_ratio.set("0%")
+                
+                # Configurar interfaz para compresión
+                file_info_label.configure(text=f"📄 {file_name}")
+                compress_huffman_btn.configure(state="normal")
+                preview_btn.configure(state="normal")
+                decompress_btn.configure(state="disabled")
+                
+                # Limpiar resultados anteriores
+                compressed_file_path.set("")
+                result_text.delete("1.0", "end")
+                result_text.insert("1.0", "Archivo de texto listo para compresión...")
+
+    def select_file_for_compression():
+        """Seleccionar específicamente para compresión"""
+        file_path = filedialog.askopenfilename(
+            title="Seleccionar archivo de texto para comprimir",
             filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
         )
         if file_path:
             selected_file_path.set(file_path)
             file_name = os.path.basename(file_path)
-            file_size = os.path.getsize(file_path) / 1024  
+            file_size = os.path.getsize(file_path) / 1024
             
             file_info_label.configure(text=f"📄 {file_name}")
             original_size.set(f"{file_size:.2f} KB")
+            compressed_size.set("0 KB")
+            compression_ratio.set("0%")
             
             compress_huffman_btn.configure(state="normal")
             preview_btn.configure(state="normal")
+            decompress_btn.configure(state="disabled")
             
-            compression_ratio.set("0%")
-            compressed_size.set("0 KB")
             compressed_file_path.set("")
             result_text.delete("1.0", "end")
+            result_text.insert("1.0", "Archivo de texto listo para compresión...")
+
+    def select_file_for_decompression():
+        """Seleccionar específicamente para descompresión"""
+        file_path = filedialog.askopenfilename(
+            title="Seleccionar archivo comprimido para descomprimir",
+            filetypes=[("Archivos comprimidos", "*.bin"), ("Todos los archivos", "*.*")]
+        )
+        if file_path:
+            selected_file_path.set(file_path)
+            file_name = os.path.basename(file_path)
+            file_size = os.path.getsize(file_path) / 1024
+            
+            file_info_label.configure(text=f"📦 {file_name} (comprimido)")
+            original_size.set("N/A")
+            compressed_size.set(f"{file_size:.2f} KB")
+            compression_ratio.set("N/A")
+            
+            compress_huffman_btn.configure(state="disabled")
+            preview_btn.configure(state="disabled")
+            decompress_btn.configure(state="normal")
+            
+            result_text.delete("1.0", "end")
+            result_text.insert("1.0", 
+                f"📦 Archivo comprimido detectado\n"
+                f"• Listo para descomprimir\n"
+                f"• Tamaño: {file_size:.2f} KB"
+            )
+
+    def decompress_file():
+        file_path = selected_file_path.get()
+        if file_path and os.path.exists(file_path):
+            try:
+                # Verificar que sea un archivo .bin
+                if not file_path.lower().endswith('.bin'):
+                    messagebox.showwarning("Advertencia", "Por favor seleccione un archivo .bin comprimido")
+                    return
+
+                # Seleccionar donde guardar el archivo descomprimido
+                output_path = filedialog.asksaveasfilename(
+                    title="Guardar archivo descomprimido como...",
+                    defaultextension=".txt",
+                    filetypes=[("Archivos de texto", "*.txt"), ("Todos los archivos", "*.*")]
+                )
+
+                if output_path:
+                    # Mostrar progreso
+                    result_text.delete("1.0", "end")
+                    result_text.insert("1.0", "⏳ Descomprimiendo archivo...\n")
+                    frame.update()
+
+                    start_time = time.time()
+
+                    # Usar tu lógica real de descompresión
+                    gestor_archivos_texto.descomprimir_archivo_txt(file_path, output_path)
+
+                    end_time = time.time()
+                    decompression_time = end_time - start_time
+
+                    # Calcular información del archivo resultante
+                    if os.path.exists(output_path):
+                        decompressed_size = os.path.getsize(output_path) / 1024
+                        compressed_size_bytes = os.path.getsize(file_path)
+                        decompressed_size_bytes = os.path.getsize(output_path)
+
+                        result_text.delete("1.0", "end")
+                        result_text.insert("1.0", 
+                            f"✅ Descompresión completada\n\n"
+                            f"• Archivo comprimido: {os.path.basename(file_path)}\n"
+                            f"• Tamaño comprimido: {compressed_size_bytes / 1024:.2f} KB\n"
+                            f"• Archivo descomprimido: {os.path.basename(output_path)}\n"
+                            f"• Tamaño descomprimido: {decompressed_size:.2f} KB\n"
+                            f"• Tiempo de descompresión: {decompression_time:.2f} segundos\n\n"
+                            f"💡 Archivo guardado en:\n{output_path}"
+                        )
+                    else:
+                        result_text.insert("1.0", 
+                            f"✅ Descompresión completada\n"
+                            f"• Tiempo: {decompression_time:.2f} segundos\n"
+                            f"• Archivo guardado en: {output_path}"
+                        )
+
+            except Exception as e:
+                messagebox.showerror("Error", f"Error en descompresión: {str(e)}")
+                result_text.delete("1.0", "end")
+                result_text.insert("1.0", f"❌ Error en descompresión: {str(e)}")
+        else:
+            messagebox.showwarning("Advertencia", "Primero debe seleccionar un archivo comprimido")
     
     def compress_huffman():
         file_path = selected_file_path.get()
