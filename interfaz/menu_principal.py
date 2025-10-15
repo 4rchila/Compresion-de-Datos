@@ -1,6 +1,8 @@
 import customtkinter as ctk
 from PIL import Image
 
+from ventana_texto import create_text_compression_frame
+
 def on_enter(event):
     event.widget.master.configure(
         fg_color="#6de0ff",
@@ -131,7 +133,7 @@ views = {}
 show_frame_callback = lambda name: show_frame(name, views)
 
 views["Home"] = create_home_frame(main_container, show_frame_callback)
-views["Texto"] = create_view_frame(main_container, "COMPRESIÓN DE TEXTO 📝", show_frame_callback)
+views["Texto"] = create_text_compression_frame(main_container, show_frame_callback)
 views["Imagen"] = create_view_frame(main_container, "COMPRESIÓN DE IMÁGENES 🖼️", show_frame_callback)
 views["Audio"] = create_view_frame(main_container, "COMPRESIÓN DE AUDIO 🎧", show_frame_callback)
 
