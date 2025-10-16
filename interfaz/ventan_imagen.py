@@ -108,12 +108,23 @@ class VentanaImagen(ctk.CTk):
             tamaño_original = os.path.getsize(self.ruta_archivo)
             tamaño_comprimido = os.path.getsize(archivo_salida)
 
-            self.tamaño_original.set(f"Tamaño original: {tamaño_original} bytes")
-            self.tamaño_comprimido.set(f"Tamaño comprimido: {tamaño_comprimido} bytes")
-            self.estado.set(f"✅ Imagen comprimida correctamente.\nGuardada en:\n{archivo_salida}")
+            # Conversión a bits
+            original_bits = tamaño_original * 8
+            comprimido_bits = tamaño_comprimido * 8
+
+            # Ahorro
+            ahorro_bytes = tamaño_original - tamaño_comprimido
+            ahorro_bits = ahorro_bytes * 8
+
+            self.tamaño_original.set(f"Tamaño original: {tamaño_original} bytes ({original_bits} bits)")
+            self.tamaño_comprimido.set(f"Tamaño comprimido: {tamaño_comprimido} bytes ({comprimido_bits} bits)")
+            self.estado.set(f"Ahorro: {ahorro_bytes} bytes ({ahorro_bits} bits)")
 
         except Exception as e:
             messagebox.showerror("Error", f"Ocurrió un error al comprimir:\n{e}")
+
+
+
 
     def descomprimir(self):
         if not self.ruta_archivo:
