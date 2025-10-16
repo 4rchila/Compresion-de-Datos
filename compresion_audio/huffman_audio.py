@@ -1,5 +1,5 @@
 # compresion_audio/huffman_audio.py
-# Lógica de compresión/descompresión Huffman para WAV
+# Compresión/Descompresión de WAV usando Huffman → .huff (sin pérdida)
 # Python 3.8+
 
 import os
@@ -10,12 +10,11 @@ import pickle
 from collections import Counter
 from typing import Optional, Tuple, Dict, List
 
-
 # ======================== NODO HUFFMAN ========================
 class NodoHuffman:
     def __init__(self, valor: Optional[int] = None, freq: int = 0,
                  izq: 'NodoHuffman' = None, der: 'NodoHuffman' = None):
-        self.valor = valor      # byte 0..255 (símbolo) o None si nodo interno
+        self.valor = valor
         self.freq = freq
         self.izq = izq
         self.der = der
@@ -27,13 +26,12 @@ class NodoHuffman:
 # ===================== UTILIDADES DE BITS =====================
 def _pack_bits(bits_str: str) -> Tuple[bytes, int]:
     """
-    Empaqueta una cadena de bits '0101...' en bytes.
-    Devuelve (bytes_empaquetados, n_bits_validos) para recuperar sin padding.
+    Empaqueta '010101...' en bytes. Retorna (bytes_empaquetados, n_bits_validos).
     """
     n = len(bits_str)
     if n == 0:
         return b"", 0
-    pad = (-n) % 8  # cuantos ceros para completar múltiplo de 8
+    pad = (-n) % 8
     if pad:
         bits_str += "0" * pad
     out = bytearray()
@@ -44,8 +42,7 @@ def _pack_bits(bits_str: str) -> Tuple[bytes, int]:
 
 def _unpack_bits(data: bytes, n_valid_bits: int) -> str:
     """
-    Convierte bytes a cadena de bits, recortando a n_bits_validos para
-    eliminar padding.
+    Convierte bytes a '0101...' y recorta a n_valid_bits para eliminar padding.
     """
     if not data or n_valid_bits == 0:
         return ""
@@ -53,51 +50,59 @@ def _unpack_bits(data: bytes, n_valid_bits: int) -> str:
     return bits[:n_valid_bits]
 
 
-# ======================= CLASE PRINCIPAL =======================
+# ======================= CLASE PRINCIPAL ======================
 class CompresionAudio:
     """
-    Maneja compresión y descompresión Huffman sobre los BYTES crudos del WAV.
-    No hay pérdida: se reescribe el mismo stream de bytes y se restauran
-    los parámetros de cabecera (canales, sample width, framerate, nframes).
+    Compresión Huffman sobre los BYTES crudos del WAV (lossless).
+    Guarda .huff con:
+      - packed (bytes) + n_valid_bits
+      - frecuencias (símbolos 0..255)
+      - parámetros WAV (nchannels, sampwidth, framerate, nframes)
+      - n_muestras (largo del stream)
+    También genera un WAV de verificación: '<base> (comprimido).wav'
+    y al extraer crea '<base>_descomprimido.wav'
     """
+    _re_ruta = re.compile(
+        r'^(?:[A-Za-z]:\\|\\\\|\/|~)?(?:[^\\\/\r\n]+[\\\/])*[^\\\/\r\n]+$'
+    )
+
     def __init__(self, ruta: str, muestras: Optional[List[int]] = None):
+        if not isinstance(ruta, str) or not ruta:
+            raise ValueError("Debes proporcionar una ruta de archivo.")
+        if not self._re_ruta.match(ruta):
+            raise ValueError("Ruta inválida: intenta otra vez con un formato de ruta válido.")
         self._ruta = ruta
         self.muestras = muestras
 
-    # -------- validación de ruta --------
+    # ------------ validación de ruta ------------
     @property
     def ruta(self) -> str:
         return self._ruta
 
     @ruta.setter
     def ruta(self, rutaArchivo: str):
-        protocolo = re.compile(r'^(?:[A-Za-z]:\\|\\\\|\/|~)?(?:[^\\\/\r\n]+[\\\/])*[^\\\/\r\n]+$')
-        if re.match(protocolo, rutaArchivo):
-            self._ruta = rutaArchivo
-        else:
-            raise ValueError("Ruta inválida: intenta otra vez con un formato de ruta válido.")
+        if not self._re_ruta.match(rutaArchivo):
+            raise ValueError("Ruta inválida.")
+        self._ruta = rutaArchivo
 
-    # -------- lectura WAV -> lista[int 0..255] --------
+    # ------------ lectura WAV → lista [0..255] ------------
     def leerMuestras(self) -> List[int]:
-        """
-        Lee todos los frames del WAV (bytes crudos). Devuelve lista de enteros 0..255.
-        """
         try:
             with wave.open(self.ruta, "rb") as wav:
                 frames = wav.readframes(wav.getnframes())
-                self.muestras = list(frames)
+                self.muestras = list(frames)  # bytes → ints 0..255
             return self.muestras
         except Exception as e:
-            raise ValueError(f"Error leyendo archivo WAV: {e}")
+            raise ValueError(f"Error leyendo WAV: {e}")
 
     # -------- parámetros de cabecera --------
     def obtener_parametros_wav(self) -> Dict[str, int]:
-        with wave.open(self.ruta, "rb") as wav:
+        with wave.open(self.ruta, "rb") as w:
             return {
-                "nchannels": wav.getnchannels(),
-                "sampwidth": wav.getsampwidth(),
-                "framerate": wav.getframerate(),
-                "nframes": wav.getnframes(),
+                "nchannels": w.getnchannels(),
+                "sampwidth": w.getsampwidth(),
+                "framerate": w.getframerate(),
+                "nframes": w.getnframes(),
             }
 
     # -------- árbol/códigos Huffman --------
@@ -130,50 +135,53 @@ class CompresionAudio:
     def codificar(self, muestras: List[int], codigos: Dict[int, str]) -> str:
         return ''.join(codigos[m] for m in muestras) if muestras else ""
 
-    def decodificar(self, bits: str, raiz: NodoHuffman) -> List[int]:
-        nodo = raiz
+    def decodificar(self, bits: str, raiz: NodoHuffman, total: int) -> List[int]:
+        # caso símbolo único (árbol con un solo valor)
+        if raiz and raiz.valor is not None:
+            return [raiz.valor] * total
         out: List[int] = []
+        nodo = raiz
         for b in bits:
             nodo = nodo.izq if b == "0" else nodo.der
             if nodo.valor is not None:
                 out.append(nodo.valor)
+                if len(out) == total:
+                    break
                 nodo = raiz
         return out
 
     # ========================= COMPRESIÓN =========================
-    def comprimir(self, archivo_salida_huff: Optional[str] = None, **kwargs) -> Tuple[str, str]:
+    def comprimir(self, archivo_salida_huff: Optional[str] = None) -> Tuple[str, str]:
         """
         Comprime el WAV actual.
         Devuelve (ruta_huff, ruta_wav_verificacion).
-
-        - Si no se da archivo_salida_huff, crea '<original>.huff'.
-        - Además crea '<original> (comprimido).wav' para escuchar/verificar.
+        - Si no se pasa archivo_salida_huff, crea '<original>.huff'.
+        - Genera '<original> (comprimido).wav' para escuchar/verificar.
         """
-        # Compat: permitir archivo_salida=...
-        if archivo_salida_huff is None and 'archivo_salida' in kwargs:
-            archivo_salida_huff = kwargs.get('archivo_salida')
-
         if self.muestras is None:
             self.leerMuestras()
 
-        # Rutas por defecto
-        base, _ = os.path.splitext(self.ruta)
+        base, ext = os.path.splitext(self.ruta)
+        if ext.lower() != ".wav":
+            raise ValueError("Para comprimir, el archivo de entrada debe ser .wav")
+
         if not archivo_salida_huff:
             archivo_salida_huff = base + ".huff"
         if not archivo_salida_huff.lower().endswith(".huff"):
             archivo_salida_huff += ".huff"
+
         wav_ver = f"{base} (comprimido).wav"
 
-        # Construir modelo
+        # Modelo
         freqs = Counter(self.muestras)
         raiz = self.construir_arbol(freqs)
         codigos = self.generarCodigos(raiz)
 
-        # Codificar y empaquetar
+        # Codificar + empaquetar
         bits = self.codificar(self.muestras, codigos)
         packed, n_valid = _pack_bits(bits)
 
-        # Guardar .huff con metadatos
+        # Metadatos del WAV original
         params = self.obtener_parametros_wav()
         payload = {
             "packed": packed,
@@ -187,14 +195,13 @@ class CompresionAudio:
 
         # Reconstrucción inmediata (verificación audible)
         try:
-            dec_bytes = bytes(self._decodificar_desde_paquete(packed, n_valid, freqs, len(self.muestras)))
+            dec = self._decodificar_desde_paquete(packed, n_valid, freqs, len(self.muestras))
+            dec_bytes = bytes(dec)
             self._escribir_wav(dec_bytes, params, wav_ver)
         except Exception:
             # No bloquea la compresión si la verificación falla
             pass
 
-        print(f"Archivo comprimido: {archivo_salida_huff}")
-        print(f"WAV verificación:   {wav_ver}")
         return archivo_salida_huff, wav_ver
 
     # ======================= DESCOMPRESIÓN =======================
@@ -202,14 +209,13 @@ class CompresionAudio:
                        archivo_salida: Optional[str] = None) -> str:
         """
         Descomprime un .huff a WAV.
-        - Si archivo_comprimido es None, intenta usar '<self.ruta>.huff'.
+        - Si archivo_comprimido es None, usa '<self.ruta>.huff'.
         - Si archivo_salida es None, crea '<base>_descomprimido.wav'.
         Devuelve la ruta del WAV generado.
         """
-        # Resolver .huff por defecto si no se pasa
         if archivo_comprimido is None:
             if not self.ruta or not self.ruta.lower().endswith(".wav"):
-                raise ValueError("Especifica archivo_comprimido o inicializa la clase con un WAV válido.")
+                raise ValueError("Especifica archivo_comprimido o inicializa con un WAV válido.")
             archivo_comprimido = os.path.splitext(self.ruta)[0] + ".huff"
 
         if not archivo_comprimido.lower().endswith(".huff"):
@@ -229,7 +235,6 @@ class CompresionAudio:
         dec = self._decodificar_desde_paquete(packed, n_valid, freqs, n_muestras)
         raw = bytes(dec)
 
-        # Ruta de salida
         if archivo_salida is None:
             base = os.path.splitext(archivo_comprimido)[0]
             archivo_salida = base + "_descomprimido.wav"
@@ -237,27 +242,23 @@ class CompresionAudio:
         self._escribir_wav(raw, params, archivo_salida)
         return archivo_salida
 
-    
+    # ======================= HELPERS PRIVADOS ====================
     def _decodificar_desde_paquete(self, data_packed: bytes, n_valid_bits: int,
                                    freqs: Dict[int, int], n_muestras: int) -> List[int]:
         raiz = self.construir_arbol(freqs)
 
-       
+        # Caso símbolo único
         if raiz and raiz.valor is not None:
             total = int(n_muestras or sum(freqs.values()))
             return [raiz.valor] * total
 
         bits = _unpack_bits(data_packed, n_valid_bits)
-        return self.decodificar(bits, raiz)
+        return self.decodificar(bits, raiz, n_muestras)
 
     def _escribir_wav(self, data_bytes: bytes, params: Dict[str, int], destino: str):
-        """
-        Escribe un WAV usando la misma cabecera que el original.
-        """
         with wave.open(destino, "wb") as w:
             w.setnchannels(params["nchannels"])
             w.setsampwidth(params["sampwidth"])
             w.setframerate(params["framerate"])
             w.setnframes(params["nframes"])
             w.writeframes(data_bytes)
-        print(f"WAV escrito: {destino}")
