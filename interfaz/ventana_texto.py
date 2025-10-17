@@ -373,14 +373,14 @@ def create_text_compression_frame(main_container, show_frame_callback):
     info_frame = ctk.CTkFrame(left_panel, fg_color="#122448", corner_radius=8)
     info_frame.pack(pady=20, padx=20, fill="x")
     
-    ctk.CTkLabel(info_frame, text="📊 Información del Archivo", 
-                 font=ctk.CTkFont(weight="bold"), text_color="#6de0ff").pack(pady=(10, 5))
-    ctk.CTkLabel(info_frame, text=f"Tamaño original: {original_size.get()}", 
-                 text_color="white").pack(pady=2)
-    ctk.CTkLabel(info_frame, text=f"Tamaño comprimido: {compressed_size.get()}", 
-                 text_color="white").pack(pady=2)
-    ctk.CTkLabel(info_frame, text=f"Ratio: {compression_ratio.get()}", 
-                 text_color="white").pack(pady=(2, 10))
+    # ctk.CTkLabel(info_frame, text="📊 Información del Archivo", 
+    #              font=ctk.CTkFont(weight="bold"), text_color="#6de0ff").pack(pady=(10, 5))
+    # ctk.CTkLabel(info_frame, text=f"Tamaño original: {original_size.get()}", 
+    #              text_color="white").pack(pady=2)
+    # ctk.CTkLabel(info_frame, text=f"Tamaño comprimido: {compressed_size.get()}", 
+    #              text_color="white").pack(pady=2)
+    # ctk.CTkLabel(info_frame, text=f"Ratio: {compression_ratio.get()}", 
+    #              text_color="white").pack(pady=(2, 10))
     
     right_panel = ctk.CTkFrame(main_content, fg_color="#172b54", corner_radius=10)
     right_panel.pack(side="right", fill="both", expand=True, padx=(10, 0))
