@@ -9,11 +9,10 @@ from collections import Counter
 from typing import Optional, Tuple, Dict, List
 
 
-# ======================== NODO HUFFMAN ========================
 class NodoHuffman:
     def __init__(self, valor: Optional[int] = None, freq: int = 0,
                  izq: 'NodoHuffman' = None, der: 'NodoHuffman' = None):
-        self.valor = valor      # byte (0..255) o None si nodo interno
+        self.valor = valor 
         self.freq = freq
         self.izq = izq
         self.der = der
@@ -62,12 +61,7 @@ def _with_suffix(base_path: str, suffix: str, ext: str) -> str:
 
 # ==================== CLASE PRINCIPAL ====================
 class CompresionAudio:
-    """
-    Compresión/Descompresión con Huffman operando sobre los **bytes crudos** del WAV.
-    Soporta WAV PCM de 8/16/24/32 bits, mono o estéreo (no importa el formato: se comprimen bytes).
-    - Al comprimir: crea **copia WAV** y **archivo .flac** (contenedor propio con pickle).
-    - Al descomprimir: desde .flac crea **WAV descomprimido** (tercera copia).
-    """
+   
     def __init__(self, ruta: str, muestras: Optional[List[int]] = None):
         self._ruta = ruta
         self.muestras = muestras  # bytes -> lista de ints 0..255
@@ -85,7 +79,7 @@ class CompresionAudio:
         else:
             raise ValueError("Ruta inválida: intenta otra vez con un formato de ruta válido.")
 
-    # Lectura WAV -> lista de bytes (ints 0..255)
+    # Lectura WAV 
     def leerMuestras(self) -> List[int]:
         try:
             with wave.open(self.ruta, "rb") as wav:
@@ -107,49 +101,60 @@ class CompresionAudio:
 
     # Huffman
     def construir_arbol(self, freqs: Dict[int, int]) -> NodoHuffman:
-        heap = [NodoHuffman(v, f) for v, f in freqs.items()]
+        heap = [NodoHuffman( v, f) for v, f in freqs.items()]
+
         heapq.heapify(heap)
+
         if not heap:
             return NodoHuffman(None, 0, None, None)
         while len(heap) > 1:
             n1 = heapq.heappop(heap)
+
             n2 = heapq.heappop(heap)
-            heapq.heappush(heap, NodoHuffman(None, n1.freq + n2.freq, n1, n2))
+
+            heapq.heappush(heap, NodoHuffman( None, n1.freq + n2.freq, n1, n2))
         return heap[0]
 
     def generarCodigos(self, nodo: NodoHuffman, prefijo: str = "",
                        codigos: Optional[Dict[int, str]] = None) -> Dict[int, str]:
         if codigos is None:
             codigos = {}
+
         if nodo is None:
             return codigos
         if nodo.valor is not None:
+
             codigos[nodo.valor] = prefijo or "0"
         else:
             self.generarCodigos(nodo.izq, prefijo + "0", codigos)
+
             self.generarCodigos(nodo.der, prefijo + "1", codigos)
+
         return codigos
 
     def codificar(self, muestras: List[int], codigos: Dict[int, str]) -> str:
+
         return ''.join(codigos[m] for m in muestras) if muestras else ""
 
     def decodificar(self, bits: str, raiz: NodoHuffman) -> List[int]:
         nodo = raiz
         out: List[int] = []
         for b in bits:
+
             nodo = nodo.izq if b == "0" else nodo.der
             if nodo.valor is not None:
+                
                 out.append(nodo.valor)
                 nodo = raiz
         return out
 
-    # ========================= COMPRESIÓN =========================
+    # ==compresion aiduo
     def comprimir(self, archivo_salida_flac: Optional[str] = None,
                   crear_copia_wav: bool = True,
                   sufijo_copia: str = " (copia)") -> Dict[str, str]:
-        """
-        Devuelve: {"wav_copia": <ruta|None>, "flac": <ruta_flac>}
-        """
+        
+        ##Devuelve: {"wav_copia"  "flac": <ruta_flac>}
+        
         if not self.ruta.lower().endswith(".wav"):
             raise ValueError("Inicializa con un archivo .wav para comprimir.")
 
@@ -158,15 +163,17 @@ class CompresionAudio:
 
         base, _ = os.path.splitext(self.ruta)
 
-        # 1) Copia del WAV
+        #  Copia del WAV
         ruta_wav_copia = None
         if crear_copia_wav:
             ruta_wav_copia = _with_suffix(base, sufijo_copia, ".wav")
             shutil.copyfile(self.ruta, ruta_wav_copia)
 
-        # 2) Archivo .flac (contenedor propio)
+        # 2) Archivo .flac 
         if not archivo_salida_flac:
+
             archivo_salida_flac = base + ".flac"
+
         if not archivo_salida_flac.lower().endswith(".flac"):
             archivo_salida_flac += ".flac"
         archivo_salida_flac = _unique_path(archivo_salida_flac)
@@ -182,8 +189,10 @@ class CompresionAudio:
         payload = {
             "packed": packed,
             "n_valid_bits": n_valid,
+
             "frecuencias": dict(freqs),
             "parametros_wav": params,
+
             "n_muestras": len(self.muestras),
             "formato_original": "WAV",
         }
@@ -192,7 +201,7 @@ class CompresionAudio:
 
         return {"wav_copia": ruta_wav_copia, "flac": archivo_salida_flac}
 
-    # ======================= DESCOMPRESIÓN =======================
+    # descompresioin 
     def extraerArchivo(self, archivo_comprimido: Optional[str] = None,
                        archivo_salida: Optional[str] = None,
                        sufijo_descomp: str = " (descomprimido)") -> str:
@@ -214,7 +223,9 @@ class CompresionAudio:
 
         packed: bytes = datos.get("packed", b"")
         n_valid: int = datos.get("n_valid_bits", 0)
+
         freqs: Dict[int, int] = datos.get("frecuencias", {})
+
         params: Dict[str, int] = datos.get("parametros_wav", {})
         n_muestras: int = datos.get("n_muestras", 0)
 
@@ -226,14 +237,17 @@ class CompresionAudio:
             archivo_salida = _with_suffix(base, sufijo_descomp, ".wav")
 
         self._escribir_wav(raw, params, archivo_salida)
+
         return archivo_salida
 
     def _decodificar_desde_paquete(self, data_packed: bytes, n_valid_bits: int,
                                    freqs: Dict[int, int], n_muestras: int) -> List[int]:
         raiz = self.construir_arbol(freqs)
         if raiz and raiz.valor is not None:
+
             total = int(n_muestras or sum(freqs.values()))
             return [raiz.valor] * total
+        
         bits = _unpack_bits(data_packed, n_valid_bits)
         return self.decodificar(bits, raiz)
 
@@ -241,7 +255,9 @@ class CompresionAudio:
         destino = _unique_path(destino)
         with wave.open(destino, "wb") as w:
             w.setnchannels(params["nchannels"])
+
             w.setsampwidth(params["sampwidth"])
             w.setframerate(params["framerate"])
+
             w.setnframes(params["nframes"])
             w.writeframes(data_bytes)
