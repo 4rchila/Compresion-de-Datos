@@ -13,6 +13,30 @@ def create_imagen_frame(parent, show_frame_callback):
     estado = ctk.StringVar(value="Seleccione una imagen PNG, JPG o un archivo RLEBITS para comenzar.")
 
     # Encabezado
+    header_frame = ctk.CTkFrame(frame, fg_color="transparent")
+    header_frame.pack(fill="x", padx=20, pady=20)
+    
+    btn_volver_inicio = ctk.CTkButton(
+        header_frame,
+        text="← Volver al Inicio",
+        fg_color="#172b54",
+        border_color="#6de0ff",
+        border_width=1,
+        hover_color="#6de0ff",
+        text_color="white",
+        width=120,
+        command=lambda: show_frame_callback("Home")  # Cambia al frame principal
+    )
+    btn_volver_inicio.pack(side="left")
+    
+    # Título de la pestaña (puedes personalizar el texto)
+    ctk.CTkLabel(
+        header_frame,
+        text="NOMBRE DE LA PESTAÑA 💾",
+        font=ctk.CTkFont(size=24, weight="bold"),
+        text_color="#6de0ff"
+    ).pack(side="left", padx=20)
+
     titulo = ctk.CTkLabel(frame, text="Compresión de Imágenes con RLE",
                           font=ctk.CTkFont(size=20, weight="bold"),
                           text_color="#A8D0E6")

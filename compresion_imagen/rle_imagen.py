@@ -8,7 +8,7 @@ def comprimir_a_rlebits(ruta):
     print("Convirtiendo")
     bits = ""
     for byte in datos:
-        bits_de_byte = format(byte, "08b") 
+        bits_de_byte = format(byte, "08b")
         bits += bits_de_byte
 
     print("Iniciando compresión")
@@ -28,7 +28,8 @@ def comprimir_a_rlebits(ruta):
 
     nombre = os.path.splitext(os.path.basename(ruta))[0]
     carpeta = os.path.dirname(ruta)
-    archivo_salida = os.path.join(carpeta, nombre + ".rlebits")
+    extension_original = os.path.splitext(ruta)[1]  # Guarda extensión original (.png / .jpg)
+    archivo_salida = os.path.join(carpeta, f"{nombre}_{extension_original[1:]}.rlebits")
 
     print("Guardando archivo comprimido...")
     with open(archivo_salida, "w") as f:
@@ -61,15 +62,27 @@ def descomprimir_rlebits(ruta):
     for i in range(0, len(bits), 8):
         byte = bits[i:i + 8]
         if len(byte) < 8:
-            byte = byte.ljust(8, "0") 
+            byte = byte.ljust(8, "0")
         bytes_resultado.append(int(byte, 2))
 
     nombre = os.path.splitext(os.path.basename(ruta))[0]
+
+    # 🔹 Detectar formato original desde el nombre
+    if "_png" in nombre:
+        extension_original = ".png"
+        nombre = nombre.replace("_png", "")
+    elif "_jpg" in nombre or "_jpeg" in nombre:
+        extension_original = ".jpg"
+        nombre = nombre.replace("_jpg", "").replace("_jpeg", "")
+    else:
+        extension_original = ".bin"
+
     carpeta = os.path.dirname(ruta)
-    salida = os.path.join(carpeta, nombre + "_descomprimido.bin")
+    salida = os.path.join(carpeta, f"{nombre}_descomprimido{extension_original}")
 
     print("Guardando archivo ")
     with open(salida, "wb") as f:
         f.write(bytes_resultado)
 
+    print("✅ Archivo descomprimido correctamente:", salida)
     return salida

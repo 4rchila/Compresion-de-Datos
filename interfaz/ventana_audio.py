@@ -2,6 +2,7 @@ import os
 import platform
 import tempfile
 import tkinter as tk
+import customtkinter as ctk
 from tkinter import ttk, filedialog as fd, messagebox as mb
 
 try:
@@ -81,18 +82,27 @@ class ReproductorAudio:
             except Exception:
                 pass
 
-
 def create_audio_frame(parent, show_frame_callback):
     frame = ttk.Frame(parent)
+    
     rep = ReproductorAudio()
     ruta_wav = tk.StringVar()
     ruta_flac = tk.StringVar()
 
-    ttk.Label(frame, text="Compresión de Audio (WAV ↔ FLAC por Huffman)",
-              font=("Segoe UI Semibold", 16)).pack(anchor="w", pady=(10, 4), padx=20)
-    ttk.Label(frame, text="Selecciona un archivo WAV para comprimir o un FLAC para descomprimir.",
-              foreground="#499ac5").pack(anchor="w", padx=20)
+    # --- Título ---
+    ttk.Label(
+        frame,
+        text="Compresión de Audio (WAV ↔ FLAC por Huffman)",
+        font=("Segoe UI Semibold", 16)
+    ).pack(anchor="w", pady=(10, 4), padx=20)
 
+    ttk.Label(
+        frame,
+        text="Selecciona un archivo WAV para comprimir o un FLAC para descomprimir.",
+        foreground="#499ac5"
+    ).pack(anchor="w", padx=20)
+
+    # --- Cuerpo ---
     body = ttk.Frame(frame, padding=20)
     body.pack(fill="both", expand=True)
 
@@ -112,16 +122,24 @@ def create_audio_frame(parent, show_frame_callback):
     flac_entry.pack(side="left", padx=8, fill="x", expand=True)
     ttk.Button(fila2, text="Buscar FLAC...", command=lambda: buscar_flac()).pack(side="left")
 
-    # Botones principales
+    # --- Botones principales ---
     botones = ttk.Frame(body)
     botones.pack(fill="x", pady=10)
+
     ttk.Button(botones, text="Comprimir WAV → FLAC", command=lambda: comprimir()).pack(side="left", padx=6)
     ttk.Button(botones, text="Descomprimir FLAC → WAV", command=lambda: descomprimir()).pack(side="left", padx=6)
     ttk.Button(botones, text="▶ Reproducir WAV", command=lambda: reproducir_wav()).pack(side="left", padx=6)
     ttk.Button(botones, text="⏸ Pausar", command=lambda: rep.pausar()).pack(side="left", padx=6)
     ttk.Button(botones, text="🔁 Reanudar", command=lambda: rep.reanudar(ruta_wav.get())).pack(side="left", padx=6)
-    ttk.Button(botones, text="🔙 Regresar", command=lambda: show_frame_callback("Menú")).pack(side="right", padx=6)
 
+    # --- Botón de regreso ---
+    ttk.Button(
+        frame,
+        text="🔙 Regresar al menú principal",
+        command=lambda: show_frame_callback("Menú")
+    ).pack(anchor="e", padx=20, pady=(0, 10))
+
+    # --- Estado ---
     estado = ttk.Label(frame, text="Listo.", foreground="#499ac5")
     estado.pack(anchor="w", padx=20, pady=(0, 10))
 
@@ -188,4 +206,5 @@ def create_audio_frame(parent, show_frame_callback):
             set_estado("Error durante descompresión.")
 
     return frame
+
 
