@@ -2,6 +2,9 @@ import customtkinter as ctk
 from PIL import Image
 
 from ventana_texto import create_text_compression_frame
+from ventana_audio import create_audio_frame
+from ventan_imagen import create_imagen_frame
+
 
 def on_enter(event):
     event.widget.master.configure(
@@ -134,8 +137,8 @@ show_frame_callback = lambda name: show_frame(name, views)
 
 views["Home"] = create_home_frame(main_container, show_frame_callback)
 views["Texto"] = create_text_compression_frame(main_container, show_frame_callback)
-views["Imagen"] = create_view_frame(main_container, "COMPRESIÓN DE IMÁGENES 🖼️", show_frame_callback)
-views["Audio"] = create_view_frame(main_container, "COMPRESIÓN DE AUDIO 🎧", show_frame_callback)
+views["Imagen"] = create_imagen_frame(main_container, show_frame_callback)
+views["Audio"] = create_audio_frame(main_container, show_frame_callback)
 
 for frame in views.values():
     frame.grid(row=0, column=0, sticky="nsew")
@@ -143,7 +146,6 @@ for frame in views.values():
 show_frame("Home", views)
 
 app.mainloop()
-
 
 ##marco = ctk.CTkFrame(app)
 ##marco.pack(pady=20, padx=20)
