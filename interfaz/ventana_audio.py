@@ -1,5 +1,4 @@
 # app_interfaz.py
-# Interfaz Tkinter para compresión Huffman: WAV ↔ .huff ↔ WAV
 import os
 import platform
 import tempfile
@@ -8,8 +7,8 @@ from tkinter import ttk
 from tkinter import filedialog as fd
 from tkinter import messagebox as mb
 
+# ===== Importa tu lógica Huffman =====
 try:
-    # Lógica Huffman (este archivo debe existir)
     from compresion_audio.huffman_audio import CompresionAudio
 except ModuleNotFoundError:
     import importlib.util
@@ -31,9 +30,9 @@ except ModuleNotFoundError:
     if CompresionAudio is None:
         raise ModuleNotFoundError("No se encontró compresion_audio/huffman_audio.py")
 
-# ===== Reproductor simple (WAV) =====
+# ===== Reproductor =====
 try:
-    import simpleaudio as sa  # pip install simpleaudio
+    import simpleaudio as sa
 except Exception:
     sa = None
 
@@ -43,6 +42,7 @@ if USE_WINSOUND:
         import winsound
     except Exception:
         winsound = None
+        USE_WINSOUND = False
 
 
 class ReproductorAudio:
@@ -54,7 +54,7 @@ class ReproductorAudio:
         if not os.path.exists(ruta):
             raise FileNotFoundError("No se encontró el archivo WAV.")
         if os.path.splitext(ruta)[1].lower() != ".wav":
-            raise ValueError("Solo se puede reproducir .wav.")
+            raise ValueError("Solo se permite reproducir archivos .wav")
         self.detener()
         if sa is not None:
             wave_obj = sa.WaveObject.from_wave_file(ruta)
@@ -62,7 +62,7 @@ class ReproductorAudio:
         elif USE_WINSOUND and winsound is not None:
             winsound.PlaySound(ruta, winsound.SND_FILENAME | winsound.SND_ASYNC)
         else:
-            raise RuntimeError("Para reproducir instala simpleaudio: pip install simpleaudio")
+            raise RuntimeError("Instala simpleaudio: pip install simpleaudio")
 
     def pausar(self):
         if not self._aviso_pausa:
@@ -95,15 +95,16 @@ class App:
 
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Compresor de Audio (Huffman): WAV ↔ .huff (sin pérdida)")
+        self.root.title("Compresión de Audio (WAV ↔ FLAC por Huffman)")
         self.root.geometry("760x360")
         self.root.minsize(680, 320)
         self.root.configure(bg=self.APP_BG)
 
         self.rep = ReproductorAudio()
         self._ruta_wav = ""
-        self._ruta_huff = None
-        self._tmp_convert_wav = None  # no lo usamos aquí, pero lo dejamos para consistencia
+        self._ruta_flac = None
+        self._ultima_descomp = None   # última ruta WAV creada al descomprimir
+        self._temp_wavs = []          # temporales para reproducción desde FLAC
 
         self._config_estilos()
         self._layout()
@@ -127,16 +128,17 @@ class App:
     def _layout(self):
         hdr = ttk.Frame(self.root, padding=12)
         hdr.pack(fill="x")
-        ttk.Label(hdr, text="WAV ↔ .huff (Huffman sin pérdida)", style="Header.TLabel").pack(anchor="w")
+        ttk.Label(hdr, text="Compresión de Audio (WAV ↔ FLAC por Huffman)", style="Header.TLabel").pack(anchor="w")
         ttk.Label(
             hdr,
-            text="• Comprimir: genera '<original>.huff' y '<original> (comprimido).wav'  • Descomprimir: '<archivo>.huff' → '<archivo>_descomprimido.wav'",
-            style="Hint.TLabel", wraplength=720
+            text="Genera copia WAV, archivo .flac (contenedor Huffman) y WAV descomprimido.",
+            style="Hint.TLabel", wraplength=700
         ).pack(anchor="w", pady=(2, 0))
 
         body = ttk.Frame(self.root, padding=12)
         body.pack(fill="both", expand=True, padx=12, pady=6)
 
+        # Selección de archivo WAV
         fila1 = ttk.Frame(body)
         fila1.grid(row=0, column=0, sticky="w", pady=(4, 8))
         ttk.Label(fila1, text="Archivo WAV:").grid(row=0, column=0, sticky="w", padx=(0, 8))
@@ -144,42 +146,69 @@ class App:
         self.ent_ruta.grid(row=0, column=1, sticky="w")
         ttk.Button(fila1, text="Buscar…", command=self._buscar_wav).grid(row=0, column=2, padx=(8, 0))
 
+        # Selección de archivo FLAC
+        fila3 = ttk.Frame(body)
+        fila3.grid(row=1, column=0, sticky="w", pady=(0, 8))
+        ttk.Label(fila3, text="Archivo FLAC:").grid(row=0, column=0, sticky="w", padx=(0, 8))
+        self.ent_ruta_flac = ttk.Entry(fila3, width=60)
+        self.ent_ruta_flac.grid(row=0, column=1, sticky="w")
+        ttk.Button(fila3, text="Buscar FLAC…", command=self._buscar_flac).grid(row=0, column=2, padx=(8, 0))
+
+        # Info
         fila2 = ttk.Frame(body)
-        fila2.grid(row=1, column=0, sticky="w", pady=(0, 6))
-        ttk.Label(fila2, text="Reproduce el WAV original, el WAV (comprimido) o el WAV descomprimido.",
+        fila2.grid(row=2, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(fila2, text="Reproduce WAV original o FLAC (se descomprime temporalmente).",
                   style="Hint.TLabel").grid(row=0, column=0, sticky="w")
 
+        # Botones principales
         bot = ttk.Frame(body)
-        bot.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        bot.grid(row=3, column=0, sticky="ew", pady=(8, 0))
         for i in range(7):
             bot.columnconfigure(i, weight=1)
 
-        self.btn_comp = ttk.Button(bot, text="Comprimir → .huff", style="Accent.TButton",
+        self.btn_comp = ttk.Button(bot, text="Comprimir WAV → FLAC", style="Accent.TButton",
                                    command=self._accion_comprimir, state="disabled")
         self.btn_comp.grid(row=0, column=0, sticky="ew", padx=(0, 6))
 
-        self.btn_desc = ttk.Button(bot, text="Descomprimir .huff → WAV", command=self._accion_descomprimir)
+        self.btn_desc = ttk.Button(bot, text="Descomprimir FLAC → WAV",
+                                   command=self._accion_descomprimir)
         self.btn_desc.grid(row=0, column=1, sticky="ew", padx=6)
 
         self.btn_play_orig = ttk.Button(bot, text="Reproducir WAV original",
                                         command=self._accion_play_original, state="disabled")
         self.btn_play_orig.grid(row=0, column=2, sticky="ew", padx=6)
 
-        self.btn_play_comp = ttk.Button(bot, text="Reproducir WAV (comprimido)",
-                                        command=self._accion_play_comprimido, state="disabled")
-        self.btn_play_comp.grid(row=0, column=3, sticky="ew", padx=6)
-
-        self.btn_play_desc = ttk.Button(bot, text="Reproducir WAV descomprimido",
-                                        command=self._accion_play_descomp, state="disabled")
-        self.btn_play_desc.grid(row=0, column=4, sticky="ew", padx=6)
+        self.btn_play_seg = ttk.Button(bot, text="Reproducir FLAC (temporal)",
+                                       command=self._accion_play_desde_flac, state="disabled")
+        self.btn_play_seg.grid(row=0, column=3, sticky="ew", padx=6)
 
         self.btn_pause = ttk.Button(bot, text="Pausar", command=self._accion_pausar)
-        self.btn_pause.grid(row=0, column=5, sticky="ew", padx=6)
+        self.btn_pause.grid(row=0, column=4, sticky="ew", padx=6)
 
         self.btn_resume = ttk.Button(bot, text="Reanudar", command=self._accion_reanudar)
-        self.btn_resume.grid(row=0, column=6, sticky="ew", padx=(6, 0))
+        self.btn_resume.grid(row=0, column=5, sticky="ew", padx=6)
 
-    # ====================== Acciones ======================
+        self.btn_comp_ver = ttk.Button(bot, text="Comparar versiones",
+                                       command=self._accion_comparar)
+        self.btn_comp_ver.grid(row=0, column=6, sticky="ew", padx=(6, 0))
+
+        # Estado inferior
+        self.lbl_estado = ttk.Label(self.root, text="Listo.", style="Hint.TLabel")
+        self.lbl_estado.pack(anchor="w", padx=16, pady=(8, 12))
+
+    # ===== Util =====
+    def _set_estado(self, msg: str):
+        self.lbl_estado.config(text=msg)
+        self.root.update_idletasks()
+
+    def _temp_wav_path(self) -> str:
+        fd_tmp = tempfile.NamedTemporaryFile(prefix="flac_tmp_", suffix=".wav", delete=False)
+        ruta = fd_tmp.name
+        fd_tmp.close()
+        self._temp_wavs.append(ruta)
+        return ruta
+
+    # ===== Acciones =====
     def _buscar_wav(self):
         p = fd.askopenfilename(title="Selecciona WAV", filetypes=[("WAV", "*.wav")])
         if not p:
@@ -192,14 +221,28 @@ class App:
         self.ent_ruta.insert(0, p)
         self.btn_play_orig.configure(state="normal")
         self.btn_comp.configure(state="normal")
+        # ¿Existe su FLAC correspondiente?
+        cand = os.path.splitext(self._ruta_wav)[0] + ".flac"
+        if os.path.exists(cand):
+            self._ruta_flac = cand
+            self.ent_ruta_flac.delete(0, tk.END)
+            self.ent_ruta_flac.insert(0, cand)
+            self.btn_play_seg.configure(state="normal")
+        else:
+            self._ruta_flac = None
+            self.btn_play_seg.configure(state="disabled")
 
-        # Habilitar botones de reproducción si existen archivos generados
-        base = os.path.splitext(self._ruta_wav)[0]
-        wav_comp = f"{base} (comprimido).wav"
-        self.btn_play_comp.configure(state="normal" if os.path.exists(wav_comp) else "disabled")
-
-        wav_desc = f"{base}_descomprimido.wav"
-        self.btn_play_desc.configure(state="normal" if os.path.exists(wav_desc) else "disabled")
+    def _buscar_flac(self):
+        p = fd.askopenfilename(title="Selecciona FLAC", filetypes=[("FLAC", "*.flac")])
+        if not p:
+            return
+        if os.path.splitext(p)[1].lower() != ".flac":
+            mb.showwarning("Formato", "Selecciona un archivo .flac")
+            return
+        self.ent_ruta_flac.delete(0, tk.END)
+        self.ent_ruta_flac.insert(0, p)
+        self._ruta_flac = p
+        self.btn_play_seg.configure(state="normal")
 
     def _accion_play_original(self):
         if not self._ruta_wav:
@@ -207,61 +250,43 @@ class App:
             return
         try:
             self.rep.reproducir_wav(self._ruta_wav)
+            self._set_estado(f"Reproduciendo: {os.path.basename(self._ruta_wav)}")
         except Exception as e:
-            mb.showerror("Reproducir WAV", str(e))
+            mb.showerror("Reproducir", str(e))
 
-    def _accion_play_comprimido(self):
-        if not self._ruta_wav:
-            mb.showwarning("Sin archivo", "Selecciona un WAV primero.")
+    def _accion_play_desde_flac(self):
+        ruta_flac = self._ruta_flac or self.ent_ruta_flac.get().strip()
+        if not ruta_flac:
+            mb.showwarning("Sin FLAC", "Selecciona o genera un archivo FLAC primero.")
             return
-        base = os.path.splitext(self._ruta_wav)[0]
-        wav_comp = f"{base} (comprimido).wav"
-        if not os.path.exists(wav_comp):
-            mb.showwarning("No existe", "Aún no hay WAV (comprimido). Pulsa Comprimir primero.")
+        if not os.path.exists(ruta_flac):
+            mb.showwarning("No existe", f"No se encontró el archivo FLAC: {ruta_flac}")
             return
         try:
-            self.rep.reproducir_wav(wav_comp)
+            temp_wav = self._temp_wav_path()
+            comp = CompresionAudio("dummy.wav")
+            wav_descomprimido = comp.extraerArchivo(ruta_flac, temp_wav)
+            self.rep.reproducir_wav(wav_descomprimido)
+            self._set_estado(f"Reproduciendo (temporal): {os.path.basename(wav_descomprimido)}")
+        except NotImplementedError as e:
+            mb.showerror("Formato WAV", str(e))
         except Exception as e:
-            mb.showerror("Reproducir WAV (comprimido)", str(e))
-
-    def _accion_play_descomp(self):
-        if not self._ruta_wav:
-            mb.showwarning("Sin archivo", "Selecciona un WAV primero (para ubicar la base).")
-            return
-        base = os.path.splitext(self._ruta_wav)[0]
-        wav_desc = f"{base}_descomprimido.wav"
-        if not os.path.exists(wav_desc):
-            # si no existe, intenta deducir desde .huff
-            ruta_huff = base + ".huff"
-            if os.path.exists(ruta_huff):
-                comp = CompresionAudio(self._ruta_wav)
-                try:
-                    wav_out = comp.extraerArchivo(ruta_huff)
-                    wav_desc = wav_out
-                except Exception as e:
-                    mb.showerror("Descomprimir para reproducir", str(e))
-                    return
-            else:
-                mb.showwarning("No existe", "No encuentro el WAV descomprimido.")
-                return
-        try:
-            self.rep.reproducir_wav(wav_desc)
-        except Exception as e:
-            mb.showerror("Reproducir WAV descomprimido", str(e))
+            mb.showerror("Reproducir FLAC", f"Error al descomprimir FLAC: {str(e)}")
 
     def _accion_pausar(self):
         try:
             self.rep.pausar()
+            self._set_estado("Pausado.")
         except Exception as e:
             mb.showerror("Pausar", str(e))
 
     def _accion_reanudar(self):
-        # Reanuda sobre el WAV original
         if not self._ruta_wav:
             mb.showwarning("Sin archivo", "Selecciona un WAV primero.")
             return
         try:
             self.rep.reanudar(self._ruta_wav)
+            self._set_estado("Reanudando desde el inicio.")
         except Exception as e:
             mb.showerror("Reanudar", str(e))
 
@@ -273,39 +298,123 @@ class App:
             mb.showwarning("Formato", "Selecciona un archivo .wav")
             return
         try:
+            self._set_estado("Comprimiendo...")
             comp = CompresionAudio(self._ruta_wav)
-            ruta_huff, wav_ver = comp.comprimir()  # crea <base>.huff y "<base> (comprimido).wav"
-            self._ruta_huff = ruta_huff
-            self.btn_play_comp.configure(state="normal" if os.path.exists(wav_ver) else "disabled")
-            mb.showinfo("Listo", f"Generados:\n- {os.path.basename(ruta_huff)}\n- {os.path.basename(wav_ver)}")
+            res = comp.comprimir()  # dict: {"wav_copia": ..., "flac": ...}
+            self._ruta_flac = res["flac"]
+            self.ent_ruta_flac.delete(0, tk.END)
+            self.ent_ruta_flac.insert(0, self._ruta_flac)
+            self.btn_play_seg.configure(state="normal")
+            msg = "WAV comprimido a FLAC.\n"
+            if res.get("wav_copia"):
+                msg += f"Copia WAV: {os.path.basename(res['wav_copia'])}\n"
+            msg += f"FLAC: {os.path.basename(self._ruta_flac)}"
+            mb.showinfo("Listo", msg)
+            self._set_estado("Compresión finalizada.")
+        except NotImplementedError as e:
+            mb.showerror("Formato WAV", str(e))
+            self._set_estado("Error de formato WAV.")
         except Exception as e:
-            mb.showerror("Comprimir (Huffman)", str(e))
+            mb.showerror("Comprimir", str(e))
+            self._set_estado("Error al comprimir.")
 
     def _accion_descomprimir(self):
-        # Si hay WAV cargado, intenta su <base>.huff; si no, pide uno
-        ruta_huff = ""
-        if self._ruta_wav:
-            ruta_huff = os.path.splitext(self._ruta_wav)[0] + ".huff"
-        if not ruta_huff or not os.path.exists(ruta_huff):
-            ruta_huff = fd.askopenfilename(title="Selecciona .huff",
-                                           filetypes=[("HUFFMAN", "*.huff"), ("Todos", "*.*")])
-            if not ruta_huff:
+        ruta_flac = self.ent_ruta_flac.get().strip() or self._ruta_flac
+        if not ruta_flac:
+            if self._ruta_wav:
+                ruta_flac = os.path.splitext(self._ruta_wav)[0] + ".flac"
+            else:
+                mb.showwarning("Sin archivo", "Selecciona un archivo FLAC para descomprimir.")
                 return
+
+        if not os.path.exists(ruta_flac):
+            mb.showwarning("No existe", f"No se encontró el archivo FLAC: {ruta_flac}")
+            return
+
         try:
-            # Para extraer no importa que self._ruta_wav exista; se usa solo para base
-            comp = CompresionAudio(self._ruta_wav or "salida.wav")
-            wav_out = comp.extraerArchivo(ruta_huff)  # <base>_descomprimido.wav
-            self.btn_play_desc.configure(state="normal" if os.path.exists(wav_out) else "disabled")
-            mb.showinfo("Listo", f"Descomprimido en:\n{wav_out}")
+            self._set_estado("Descomprimiendo...")
+            comp = CompresionAudio("dummy.wav")
+            wav_out = comp.extraerArchivo(ruta_flac)  # crea la tercera copia WAV
+            self._ultima_descomp = wav_out
+            self.btn_play_seg.configure(state="normal")
+            mb.showinfo("Listo", f"FLAC descomprimido a WAV:\n{os.path.basename(wav_out)}")
+            self._set_estado("Descompresión finalizada.")
+        except NotImplementedError as e:
+            mb.showerror("Formato WAV", str(e))
+            self._set_estado("Error de formato WAV.")
         except Exception as e:
-            mb.showerror("Descomprimir (Huffman)", str(e))
+            mb.showerror("Descomprimir", str(e))
+            self._set_estado("Error al descomprimir.")
+
+    def _accion_comparar(self):
+        if not self._ruta_wav:
+            mb.showwarning("Sin WAV", "Selecciona un WAV para comparar.")
+            return
+
+        # FLAC asociado
+        ruta_flac = self.ent_ruta_flac.get().strip() or self._ruta_flac
+        if not ruta_flac or not os.path.exists(ruta_flac):
+            mb.showwarning("Sin FLAC", "Genera o selecciona un FLAC primero.")
+            return
+
+        # Asegurar WAV descomprimido (si no existe, crear temporal)
+        wav_desc = self._ultima_descomp
+        temp_creado = False
+        try:
+            if not wav_desc or not os.path.exists(wav_desc):
+                temp_creado = True
+                wav_desc = self._temp_wav_path()
+                comp = CompresionAudio("dummy.wav")
+                wav_desc = comp.extraerArchivo(ruta_flac, wav_desc)
+
+            # Ratio de compresión
+            try:
+                size_wav = os.path.getsize(self._ruta_wav)
+                size_flac = os.path.getsize(ruta_flac)
+                ratio = (size_flac / size_wav * 100.0) if size_wav > 0 else float("inf")
+            except Exception:
+                ratio = float("nan")
+
+            # Comparación binaria
+            iguales = False
+            try:
+                with open(self._ruta_wav, "rb") as f1, open(wav_desc, "rb") as f2:
+                    iguales = f1.read() == f2.read()
+            except Exception:
+                iguales = False
+
+            texto = [
+                f"Tamaño WAV original: {size_wav if 'size_wav' in locals() else 'N/D'} bytes",
+                f"Tamaño FLAC: {size_flac if 'size_flac' in locals() else 'N/D'} bytes",
+                f"Ratio (FLAC / WAV): {ratio:.2f}%",
+                f"¿WAV descomprimido idéntico al original?: {'SÍ' if iguales else 'NO'}",
+            ]
+            mb.showinfo("Comparación", "\n".join(texto))
+        finally:
+            if temp_creado and wav_desc and os.path.exists(wav_desc):
+                try:
+                    os.remove(wav_desc)
+                    if wav_desc in self._temp_wavs:
+                        self._temp_wavs.remove(wav_desc)
+                except Exception:
+                    pass
 
     def _al_cerrar(self):
         try:
             self.rep.detener()
+            for p in self._temp_wavs:
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+            if os.path.exists("temp_flac_decompressed.wav"):
+                try:
+                    os.remove("temp_flac_decompressed.wav")
+                except Exception:
+                    pass
         except Exception:
             pass
-        # (No hay temporales que limpiar acá)
         self.root.destroy()
 
 
