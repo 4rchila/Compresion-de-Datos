@@ -157,7 +157,7 @@ class App:
         # Info
         fila2 = ttk.Frame(body)
         fila2.grid(row=2, column=0, sticky="w", pady=(0, 6))
-        ttk.Label(fila2, text="Reproduce WAV original o FLAC (se descomprime temporalmente).",
+        ttk.Label(fila2, text="Reproduce WAV .",
                   style="Hint.TLabel").grid(row=0, column=0, sticky="w")
 
         # Botones principales
@@ -174,7 +174,7 @@ class App:
                                    command=self._accion_descomprimir)
         self.btn_desc.grid(row=0, column=1, sticky="ew", padx=6)
 
-        self.btn_play_orig = ttk.Button(bot, text="Reproducir WAV original",
+        self.btn_play_orig = ttk.Button(bot, text="Reproducir WAV ",
                                         command=self._accion_play_original, state="disabled")
         self.btn_play_orig.grid(row=0, column=2, sticky="ew", padx=6)
 
