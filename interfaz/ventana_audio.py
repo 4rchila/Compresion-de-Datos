@@ -2,7 +2,6 @@ import os
 import platform
 import tempfile
 import tkinter as tk
-import customtkinter as ctk
 from tkinter import ttk, filedialog as fd, messagebox as mb
 
 try:
